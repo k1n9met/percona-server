@@ -42,6 +42,7 @@
 #include "sql/sql_opt_exec_shared.h"  // QEP_shared_owner
 #include "sql/table.h"
 #include "sql/temp_table_param.h"  // Temp_table_param
+#include "sql/query_result.h"
 
 class CacheInvalidatorIterator;
 class Cached_item;
@@ -256,11 +257,16 @@ bool check_unique_constraint(TABLE *table);
 ulonglong unique_hash(const Field *field, ulonglong *hash);
 int read_const(TABLE *table, Index_lookup *ref);
 
+class Gather_operator;
 class QEP_TAB : public QEP_shared_owner {
  public:
   QEP_TAB()
       : QEP_shared_owner(),
+        gather(nullptr),
+        do_parallel_scan(false),
         table_ref(nullptr),
+        pos(0),
+        pq_cond(nullptr),
         flush_weedout_table(nullptr),
         check_weed_out_table(nullptr),
         firstmatch_return(NO_PLAN_IDX),
@@ -272,6 +278,7 @@ class QEP_TAB : public QEP_shared_owner {
         tmp_table_param(nullptr),
         filesort(nullptr),
         ref_item_slice(REF_SLICE_SAVED_BASE),
+        m_condition_optim(nullptr),
         m_keyread_optim(false),
         m_reversed_access(false),
         lateral_derived_tables_depend_on_me(0) {}
@@ -279,7 +286,7 @@ class QEP_TAB : public QEP_shared_owner {
   /// Initializes the object from a JOIN_TAB
   void init(JOIN_TAB *jt);
   // Cleans up.
-  void cleanup();
+  void cleanup(bool is_free = true);
 
   // Getters and setters
 
@@ -296,6 +303,8 @@ class QEP_TAB : public QEP_shared_owner {
     m_qs->set_table(t);
     if (t) t->reginfo.qep_tab = this;
   }
+
+  void set_old_table(TABLE *t) { m_qs->set_old_table(t); }
 
   /// @returns semijoin strategy for this table.
   uint get_sj_strategy() const;
@@ -317,6 +326,8 @@ class QEP_TAB : public QEP_shared_owner {
     sets next_query_block function of previous tab.
   */
   void init_join_cache(JOIN_TAB *join_tab);
+
+  bool pq_copy(THD *thd, QEP_TAB *qep_tab);
 
   /**
      @returns query block id for an inner table of materialized semi-join, and
@@ -349,8 +360,19 @@ class QEP_TAB : public QEP_shared_owner {
   bool pfs_batch_update(const JOIN *join) const;
 
  public:
+  Gather_operator *gather;
+  bool do_parallel_scan;
+
   /// Pointer to table reference
   Table_ref *table_ref;
+
+  uint pos;  // position in qep_tab array
+
+  bool has_pq_cond{false};
+  Item *pq_cond;
+
+  LEX_CSTRING *table_name{nullptr};
+  LEX_CSTRING *db{nullptr};
 
   /* Variables for semi-join duplicate elimination */
   SJ_TMP_TABLE *flush_weedout_table;
@@ -520,7 +542,8 @@ Item *CreateConjunction(List<Item> *items);
 
 unique_ptr_destroy_only<RowIterator> PossiblyAttachFilterIterator(
     unique_ptr_destroy_only<RowIterator> iterator,
-    const std::vector<Item *> &conditions, THD *thd);
+    const std::vector<Item *> &conditions, THD *thd,
+    table_map *conditions_depend_on_outer_tables);
 
 void SplitConditions(Item *condition, QEP_TAB *current_table,
                      std::vector<Item *> *predicates_below_join,
@@ -574,7 +597,8 @@ bool ExtractConditions(Item *condition,
 AccessPath *create_table_access_path(THD *thd, TABLE *table,
                                      AccessPath *range_scan,
                                      Table_ref *table_ref, POSITION *position,
-                                     bool count_examined_rows);
+                                     bool count_examined_rows,
+                                     bool *pq_replace_path = nullptr);
 
 /**
   Creates an iterator for the given table, then calls Init() on the resulting

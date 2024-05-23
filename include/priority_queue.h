@@ -112,7 +112,7 @@ class Priority_queue : public Less {
 
   friend class priority_queue_unittest::PriorityQueueTest;
 
- private:
+ public:
   // Deriving from Less allows empty base-class optimization in some cases.
   typedef Less Base;
 
@@ -423,7 +423,7 @@ class Priority_queue : public Less {
     return false;
   }
 
- private:
+ public:
   container_type m_container;
   Marker m_marker;
 };

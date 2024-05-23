@@ -49,6 +49,7 @@
 #include "sql/mem_root_array.h"  // Mem_root_array
 #include "sql/parse_location.h"  // POS
 #include "sql/psi_memory_key.h"  // key_memory_JSON
+#include "sql/sql_lex.h"
 #include "sql_string.h"
 
 class Json_schema_validator;
@@ -193,6 +194,7 @@ class Item_json_func : public Item_func {
   double val_real() override;
   my_decimal *val_decimal(my_decimal *decimal_value) override;
 
+  enum Functype functype() const override { return JSON_FUNC; }
   void cleanup() override;
 
   Item_result cast_to_int_type() const override { return INT_RESULT; }
@@ -344,6 +346,7 @@ class Item_func_json_schema_valid final : public Item_bool_func {
 
   void cleanup() override;
 
+  Item *pq_clone(THD *thd, Query_block *select) override;
  private:
   // Wrap the object in a unique_ptr so that the relevant rapidjson destructors
   // are called.
@@ -417,6 +420,8 @@ class Item_func_json_contains final : public Item_int_func {
   enum_const_item_cache can_cache_json_arg(Item *arg) override {
     return (arg == args[0] || arg == args[1]) ? CACHE_JSON_VALUE : CACHE_NONE;
   }
+
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -533,6 +538,7 @@ class Item_func_json_depth final : public Item_int_func {
   }
 
   longlong val_int() override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**
@@ -887,6 +893,7 @@ class Item_func_json_quote : public Item_str_func {
   }
 
   String *val_str(String *tmpspace) override;
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /**

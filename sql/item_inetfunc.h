@@ -54,6 +54,8 @@ class Item_func_inet_aton : public Item_int_func {
     unsigned_flag = true;
     return false;
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
+
 };
 
 /*************************************************************************
@@ -76,6 +78,7 @@ class Item_func_inet_ntoa : public Item_str_func {
     set_nullable(true);
     return false;
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 };
 
 /*************************************************************************
@@ -132,6 +135,7 @@ class Item_func_inet6_aton : public Item_func_inet_str_base {
     set_nullable(true);
     return false;
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  protected:
   bool calc_value(String *arg, String *buffer) override;
@@ -159,6 +163,7 @@ class Item_func_inet6_ntoa : public Item_func_inet_str_base {
     set_nullable(true);
     return false;
   }
+  Item *pq_clone(THD *thd, Query_block *select) override;
 
  protected:
   bool calc_value(String *arg, String *buffer) override;
